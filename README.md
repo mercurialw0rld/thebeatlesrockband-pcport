@@ -1,11 +1,11 @@
 # The Beatles: Rock Band for PC — WIP 0.4.0
 
+<img width="1600" height="800" alt="image" src="https://github.com/user-attachments/assets/b99f0e65-bb90-49ff-b582-8cbda9cce488" />
+
 1. Extract the complete package to a writable folder.
 2. Open **BeatlesRockBandLauncher.exe**.
 3. Choose **default.xex** from your legally obtained, extracted copy of the disc. Keep **charnames.zbm** and the complete **gen** folder beside it, with its header and ten ARK files.
 4. Choose your display settings and click **Play**. Accept song-cache creation if offered.
-
-No XEX or disc data is included. Supported XEX SHA-256: A47CBAFBC7FC81E4E6CC9BD3CE317DB5EAA9E57FE46AA5EBE09E153C37CA898B.
 
 ## Controls and devices
 
@@ -31,12 +31,4 @@ Frets, strum and whammy work together. Keyboard whammy is digital; a mapped cont
 
 ## Status
 
-The launcher and editor are in English. Existing keyboard assignments, settings and saved games are preserved. Software checks cover controller mapping and analog whammy; physical-controller gameplay still needs hardware testing.
-
-The 0.3.2 performance improvements remain active: cooperative GPU waits and offline network backoff outside its internal lock. Audio uses Windows XAudio2 with regularly spaced mixing callbacks. Occasional frame-time spikes remain. This is an experimental port; microphone, drums, online play, all songs and all instrument models are not validated.
-
-Windows 10/11 x64, Direct3D 12 and .NET Framework 4.8 are required. Tested with i3-8100, 16 GB RAM and GTX 1050 Ti. Visual C++ runtime libraries are included. Saves, settings, shader cache and logs stay beside the launcher. ReXGlue and build tools are not needed to play.
-
-The original submarine artwork, Aero palette and embedded DM Serif Display are retained. Font and SDL/ReXGlue licenses are included.
-
-SDK: https://github.com/rexglue/rexglue-sdk (bd833a2). Reference: https://github.com/HossEz/fifa-world-cup-2014-recompiled.
+The game is playable and runs at 60 FPS, it might have mild performance issues depending on your hardware and manual calibration might be needed.
