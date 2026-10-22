@@ -2,7 +2,8 @@
 
 <img width="1600" height="800" alt="image" src="https://github.com/user-attachments/assets/b99f0e65-bb90-49ff-b582-8cbda9cce488" />
 
-1. Extract the complete package to a writable folder.
+## How to play
+1. Extract the complete package from releases section to a writable folder.
 2. Open **BeatlesRockBandLauncher.exe**.
 3. Choose **default.xex** from your legally obtained, extracted copy of the disc. Keep **charnames.zbm** and the complete **gen** folder beside it, with its header and ten ARK files.
 4. Choose your display settings and click **Play**. Accept song-cache creation if offered.
