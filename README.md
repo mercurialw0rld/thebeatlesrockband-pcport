@@ -1,4 +1,4 @@
-# The Beatles: Rock Band for PC — WIP 0.4.0
+# The Beatles: Rock Band for PC (Xbox 360 recomp) — WIP 0.4.0
 
 <img width="1600" height="800" alt="image" src="https://github.com/user-attachments/assets/b99f0e65-bb90-49ff-b582-8cbda9cce488" />
 
