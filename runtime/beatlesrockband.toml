@@ -1,0 +1,52 @@
+# Portable defaults. Data paths are supplied by the launcher.
+gpu_plugin = "xenos"
+log_level = "info"
+log_flush_interval = 1
+window_width = 1280
+window_height = 720
+fullscreen = false
+mnk_mode = true
+async_shader_compilation = true
+d3d12_pipeline_creation_threads = 1
+# Release CPU during GPU fence waits and rapid offline network retries.
+gpu_wait_yield = true
+offline_receive_backoff = true
+audio_maxqframes = 16
+windows_audio = true
+audio_render_pacing = true
+
+keyboard_guitar = true
+mnk_mouse = false
+keybind_a = "1,Space"
+keybind_b = "2,Backspace"
+keybind_y = "3"
+keybind_x = "4"
+keybind_left_shoulder = "5"
+keybind_right_shoulder = "S"
+keybind_dpad_up = "Up"
+keybind_dpad_down = "Down"
+keybind_dpad_left = "Left"
+keybind_dpad_right = "Right"
+keybind_start = "Return"
+keybind_back = "Tab"
+keybind_left_trigger = ""
+keybind_right_trigger = ""
+keybind_lstick_up = ""
+keybind_lstick_down = ""
+keybind_lstick_left = ""
+keybind_lstick_right = ""
+keybind_lstick_press = ""
+keybind_rstick_up = ""
+keybind_rstick_down = ""
+keybind_rstick_left = ""
+keybind_rstick_right = "W"
+keybind_rstick_press = ""
+[log.levels]
+sys = "error"
+krnl = "error"
+
+
+
+
+
+
