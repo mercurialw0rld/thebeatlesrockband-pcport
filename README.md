@@ -1,86 +1,150 @@
-# The Beatles: Rock Band for PC (Xbox 360 recomp) — WIP 0.6.1
+# The Beatles: Rock Band for PC — source code
 
-<img width="1600" height="800" alt="The Beatles: Rock Band PC launcher" src="https://github.com/user-attachments/assets/b99f0e65-bb90-49ff-b582-8cbda9cce488" />
+**WIP 0.7.2 preview · Windows x64 · ReXGlue / Direct3D 12**
 
-## How to play
+This repository contains the native compatibility code, launcher, SDK patches and tests for the PC port. It is intended for contributors who want to inspect, edit and rebuild the project. For playing, use the complete portable application from Releases.
 
-1. Download the latest portable package from the **Releases** section and extract it to a writable folder.
-2. Open **BeatlesRockBandLauncher.exe**.
-3. Choose **default.xex** from your legally obtained, extracted copy of the Xbox 360 disc. Keep **charnames.zbm** and the complete **gen** folder beside it, including its header and ten ARK files.
-4. Choose your display settings and click **Play**. Accept song-cache creation if offered.
+No original game executable, disc files, music, DLC, generated game C++, saves or shader caches are included. Code generation requires your own legally obtained, extracted Xbox 360 copy. Keep generated output and your local game files out of commits.
 
-The release package does not include the XEX, disc data or DLC.
+## Current features
 
-## Import DLC
+- Guitar and drums, with separate keyboard and physical-device profiles.
+- Controller button, D-pad and axis mapping, including analog guitar whammy.
+- English launcher with DPI-aware layout, scrollable compact views and DLC import.
+- Windows XAudio2 output with an owned COM MTA lifetime, addressing startup error `800401F0`.
+- **Performance mode**: an optional scene-transition shader fix, enabled by default and applied on the next game start. A new effect may appear a few frames later while its pipeline compiles.
 
-1. Close the game and open the launcher.
-2. Click **Import DLC** at the bottom of the launcher.
-3. Click **Choose DLC files…** and select your Xbox 360 DLC packages. You can select several files at once.
-4. Wait for the import to finish. Successfully imported packages appear in the installed-content list.
-5. Start the game again and allow its song cache to update if prompted. The additional songs should appear in **Quickplay**.
+This is an experimental port. Playable songs have been completed by the tester, but that does not validate every song, device or PC. The reported meadow-to-kaleidoscope transition and the audio startup fix still need confirmation on the reporting machines.
 
-Select the original **LIVE, PIRS or CON** package files. These often have long hexadecimal names with **no file extension**. If your backup uses the Xbox 360 content-folder structure, select the package files inside the game's **00000002** folder.
+## Repository layout
 
-**ZIP and RAR archives must be extracted first.** Select the DLC packages inside them, not the archive, a folder or the game's XEX.
-
-The importer checks that packages belong to The Beatles: Rock Band, skips identical packages even if renamed, and leaves your original files intact. Existing installed packages are not overwritten. Failed or cancelled extractions are not installed as partial packages; packages that finished earlier in the batch remain installed.
-
-Imported DLC is stored inside **userdata** beside the launcher. Keep that folder when updating the port. You do not need to recompile anything when importing supported DLC.
-
-Only data-only DLC is supported. **Title updates and DLC containing additional executable code are not supported by this importer.**
-
-## Controls and devices
-
-Open **Edit controls** and choose an **Instrument**: **Guitar** or **Drums**. Then choose your **Device**: keyboard or a connected Windows-compatible controller, guitar or drum kit.
-
-Connect your device first and use **Refresh devices** if needed. Devices requiring a receiver or driver must already be recognized by Windows. Direct MIDI input is not implemented.
-
-Click an action, then press a key or controller button, hit a pad, use a D-pad direction, or move an axis. For analog whammy, release the bar before selecting **Whammy**, then move it through its range. **Escape** cancels controller capture; **×** clears an assignment.
-
-**Save** keeps separate profiles for each instrument and device, preserving your existing guitar bindings. Changes apply the next time you start the game. The selected device is presented to the game as one guitar or one drum kit.
-
-Controller presets are starting points: check the mappings for your particular hardware. If the selected device is disconnected, reconnect it or choose **Keyboard**.
-
-### Guitar — default keyboard controls
-
-| Input | Action |
+| Path | Purpose |
 | --- | --- |
-| 1 / Space | Green / select |
-| 2 / Backspace | Red / back |
-| 3, 4, 5 | Yellow, blue, orange |
-| Up / Down | Strum / navigate |
-| Enter | Start / pause |
-| Tab | Beatlemania / Star Power |
-| W | Whammy, hold on sustained notes |
-| S | Solo frets, hold in solo sections |
-| Left / Right | Navigate menus |
+| `src/` | Native C++: audio, instruments, input, timing, networking, compatibility and DLC helper |
+| `launcher-src/` | WinForms C# launcher, responsive UI, profiles, DLC manager and UI assets |
+| `sdk-patches/` | Two ordered patches against the pinned ReXGlue SDK |
+| `config/` | Function discovery configuration and pointer hints for the supported XEX |
+| `cmake/ReXGlue.cmake` | Stable build scaffold; generated game sources are excluded |
+| `tests/` | Native synchronization/audio tests and launcher/importer regression tests |
+| `scripts/DevTools.ps1` | Visual Studio, Clang, CMake and Ninja discovery |
+| `tools/` | Optional function-pointer and PDATA inspection scripts |
+| `licenses/` | Existing third-party notices |
 
-Frets, strum and whammy work together. Keyboard whammy is digital; a mapped controller axis preserves its analog range. Beatlemania requires sufficient energy. Give the game window focus.
+## Requirements
 
-### Drums — default keyboard controls
+- Windows x64 with Direct3D 12 for running the port.
+- Git available on `PATH`.
+- Visual Studio 2022 Build Tools or Visual Studio with **Desktop development with C++**, the Windows SDK, **C++ Clang tools for Windows** and **C++ CMake tools for Windows**. The existing native build used Clang 19.1.5. CMake 3.25 or newer and Ninja must be discoverable or installed in Visual Studio's bundled locations.
+- .NET Framework 4.x, including the x64 C# compiler, for the WinForms launcher.
+- Python 3.10 or newer for optional fixture and scene-submission tests.
+- Your extracted disc files. The supported executable is:
 
-| Input | Action |
-| --- | --- |
-| D | Red pad / snare |
-| F | Yellow pad |
-| J | Blue pad |
-| K | Green pad / select |
-| Space | Kick pedal |
-| 1 / 2 | Alternate select / back |
-| Arrow keys | Navigate menus |
-| Enter | Start / pause |
-| Tab | Back button |
+```text
+Title ID:    454108B1
+Media ID:    40430A45
+XEX version: 0.0.0.1
+SHA-256:     A47CBAFBC7FC81E4E6CC9BD3CE317DB5EAA9E57FE46AA5EBE09E153C37CA898B
+```
 
-Hit the pads directly; no strumming is needed. To activate Beatlemania, play a drum fill and hit its final green note. Pads and pedal use digital inputs; velocity sensitivity and a separate pro-cymbal mode are not implemented.
+For playing, `default.xex` must remain beside `charnames.zbm` and the complete `gen` folder, with its header and ten ARK files. The launcher checks the supported revision and the presence and size of disc files.
 
-## Updating
+## Build
 
-Replace the application files with the complete new release. Keep **launcher-settings.json**, **userdata** and **cache** to preserve your mappings, saves, imported DLC and shader cache.
+Open PowerShell in this repository. The scripts discover Visual Studio with `VSINSTALLDIR` or `vswhere`; pass `-VsInstallDirectory` if your installation is elsewhere.
 
-Version **0.6.1** fixes black gaps in the launcher's panels while retaining automatic screen-size adaptation, Windows display scaling and scrolling on smaller screens.
+### 1. Build the patched SDK
 
-## Status
+```powershell
+.\Build-Sdk.ps1 -Jobs 3
+```
 
-The game is playable, with around 60 FPS observed in tested gameplay. Occasional stutters may remain, performance depends on your hardware, and manual audio/video calibration may be needed.
+This downloads the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk) at commit `bd833a2ab69d305f99ddf57418fc38ffec8af93d`, initializes required submodules, applies both patches and builds the D3D12 Release SDK. Vulkan, Tracy and performance counters are disabled. The SDK uses the x86-64-v2 CPU baseline and does not register a CMake package globally.
 
-Keyboard guitar and drum gameplay have been tested. DLC import was tested with **Abbey Road**, **Rubber Soul**, **Sgt. Pepper's Lonely Hearts Club Band** and **All You Need Is Love**. **All You Need Is Love** was confirmed playable with audio and notes; not every DLC track or physical instrument model has been tested.
+Default source: `external/rexglue-sdk`. Default installation: `external/rexglue-sdk/out/install/tbrb`. Dependencies are downloaded from upstream; they are not bundled in this ZIP. The script refuses to reset a different SDK revision or overwrite conflicting patches.
+
+An existing checkout/install may be selected explicitly:
+
+```powershell
+.\Build-Sdk.ps1 -SdkSourceDirectory 'D:\Dev\rexglue-sdk' -SdkInstallDirectory 'D:\Dev\rexglue-install'
+.\Build-Sdk.ps1 -SdkSourceDirectory 'D:\Dev\rexglue-sdk' -VerifyOnly
+```
+
+### 2. Generate and build the native port
+
+```powershell
+.\Build-Game.ps1 -GameDirectory 'D:\Games\TBRB' -Jobs 3
+```
+
+This checks the XEX hash, writes `beatlesrockband_manifest.local.toml`, runs code generation **before** configuring CMake, and builds into `out/build/game`. The local manifest and `generated/default/` are ignored by Git. Disc files are read in place, not copied into the repository.
+
+After the first build, the local manifest can be reused:
+
+```powershell
+.\Build-Game.ps1 -Jobs 3
+```
+
+Use `-SdkDirectory` for an existing patched SDK installation, `-BuildDirectory` for another native output folder, and `-AudioTests` to include the native audio test executable. `-GenerateOnly` and `-ConfigureOnly` diagnose setup without compiling the complete game.
+
+The SDK uses `clang`/`clang++` targeting Windows MSVC; the native game uses `clang-cl`. Keep the executable and runtime DLLs from a matching build together.
+
+### 3. Build the launcher and portable application
+
+```powershell
+.\Build-Launcher.ps1
+```
+
+Output: `out/BeatlesRockBand-PC`. The script compiles the C# launcher, copies the native executable/helpers and matching runtime DLLs, includes Visual C++ runtime and license files, and writes a configuration without personal data paths.
+
+Use `-GameBuildDirectory`, `-OutputDirectory`, `-VsInstallDirectory` or `-CrtDirectory` to override discovery. The CRT directory must contain the x64 `Microsoft.VC143.CRT` redistributable files for your Visual Studio toolset.
+
+### 4. Package a playable release
+
+```powershell
+.\Package.ps1
+```
+
+Output: `out/BeatlesRockBand-PC-v0.7.2-preview-portable.zip`. Packaging uses an application-file allowlist and excludes player profiles, saves, imported DLC, caches, logs, PDBs and disc data. Do not distribute the complete native build directory. For usage and DLC import, see [the player guide](launcher-src/README-English.md).
+
+## Performance mode
+
+The first SDK patch contains optional precise GPU timing, waitable presentation and recognized MSAA-clear redirection. The second removes forced background shader/pipeline completion at each submission in asynchronous mode. Cache unload and shutdown still wait for compiler work; shader readiness and persistence use atomic publication.
+
+The launcher always passes an explicit `d3d12_nonblocking_pipeline_creation` value for **Performance mode**. Unchecking it restores the previous shader completion waits. It does not change song speed, note timing or input profiles. Other configured graphics fixes remain enabled in either mode. See [patch details](sdk-patches/README.md).
+
+Achievement popups remain disabled by default to avoid continuous empty overlay redraws; tracking and F7 remain available. `achievement_popups = true` in the runtime TOML restores popups. Presentation stays on the UI thread.
+
+## Tests
+
+Run tests in a fresh, isolated output folder. The launcher suite writes synthetic profiles beside its test executable and must never be pointed at a player's installation.
+
+```powershell
+# After building the native port:
+.\tests\Test-Launcher.ps1
+
+# Synthetic DLC packages, containing no commercial song data:
+python .\tests\Make-DlcFixtures.py .\out\fixtures
+.\tests\Test-Launcher.ps1 -FixtureDirectory .\out\fixtures
+
+# Patched SDK synchronization checks; no game or GPU window required:
+.\tests\Test-SceneSubmission.ps1
+
+# Native audio tests; opens the default device without submitting sound:
+.\Build-Game.ps1 -AudioTests
+.\Build-Launcher.ps1
+Copy-Item .\out\build\game\windows-audio-tests.exe .\out\BeatlesRockBand-PC\runtime\
+.\out\BeatlesRockBand-PC\runtime\windows-audio-tests.exe
+```
+
+Keep test output paths short if you encounter the existing .NET Framework path-length limit during DLC tests. Native audio tests require a usable default playback device and matching runtime/Visual C++ DLLs; running the test from the portable runtime folder supplies them. The test executable is excluded by the release packaging allowlist. See [tests/README.md](tests/README.md) for coverage and the intentional failure-path test.
+
+## Contributing
+
+Edit compatibility and host behavior in `src/`, launcher behavior in `launcher-src/`, and generation hints in `config/`. Keep SDK changes as reproducible patches against the pinned commit. Regenerate game C++ locally instead of committing it.
+
+For performance changes, compare the same song, difficulty, resolution, foreground state and cache state. Check audio continuity and chart timing as well as frame intervals. Include build settings, hardware and reproduction steps with bug reports, and remove personal paths from logs.
+
+## Notices
+
+This bundle preserves existing ReXGlue/Xenia, FIFA-reference, SDL and font notices. Those files apply to their respective components; this archive does not assign a new project-wide license to original port contributions. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The Beatles: Rock Band names and original game content remain with their respective owners. This is an unofficial work in progress.

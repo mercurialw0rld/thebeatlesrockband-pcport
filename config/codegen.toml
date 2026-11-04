@@ -1,0 +1,12 @@
+# Keep the PowerPC calling convention intact while reducing scratch-register traffic.
+ctr_as_local = true
+xer_as_local = true
+cr_as_local = true
+non_argument_as_local = false
+non_volatile_as_local = false
+reserved_as_local = false
+
+# Tail-call target missed by the automatic discovery pass on this exact XEX.
+[functions]
+0x8264E3F0 = { name = "sub_8264E3F0" }
+0x82648980 = { name = "sub_82648980" }

@@ -1,0 +1,130 @@
+diff --git a/include/rex/graphics/d3d12/pipeline_cache.h b/include/rex/graphics/d3d12/pipeline_cache.h
+index 7a9d6a2..e4df05d 100644
+--- a/include/rex/graphics/d3d12/pipeline_cache.h
++++ b/include/rex/graphics/d3d12/pipeline_cache.h
+@@ -375,11 +375,11 @@ class PipelineCache {
+   // For only writing shaders to the currently open storage once, incremented
+   // when switching the storage.
+   uint32_t shader_storage_index_ = 0;
+-  bool shader_storage_file_flush_needed_ = false;
++  std::atomic<bool> shader_storage_file_flush_needed_{false};
+ 
+   // Pipeline storage output stream, for preload in the next emulator runs.
+   FILE* pipeline_storage_file_ = nullptr;
+-  bool pipeline_storage_file_flush_needed_ = false;
++  std::atomic<bool> pipeline_storage_file_flush_needed_{false};
+ 
+   // Thread for asynchronous writing to the storage streams.
+   void StorageWriteThread();
+@@ -396,6 +396,7 @@ class PipelineCache {
+ 
+   // Pipeline creation threads.
+   void CreationThread(size_t thread_index);
++  void AwaitPipelineCreation();
+   void CreateQueuedPipelinesOnProcessorThread();
+   std::mutex creation_request_lock_;
+   std::condition_variable creation_request_cond_;
+diff --git a/include/rex/graphics/pipeline/shader/shader.h b/include/rex/graphics/pipeline/shader/shader.h
+index 4cf3854..24ee697 100644
+--- a/include/rex/graphics/pipeline/shader/shader.h
++++ b/include/rex/graphics/pipeline/shader/shader.h
+@@ -11,6 +11,7 @@
+  */
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <cstdint>
+ #include <filesystem>
+ #include <set>
+@@ -768,10 +769,10 @@ class Shader {
+     uint64_t modification() const { return modification_; }
+ 
+     // True if the shader was translated and prepared without error.
+-    bool is_valid() const { return is_valid_; }
++    bool is_valid() const { return is_valid_.load(std::memory_order_acquire); }
+ 
+     // True if the shader has already been translated.
+-    bool is_translated() const { return is_translated_; }
++    bool is_translated() const { return is_translated_.load(std::memory_order_acquire); }
+ 
+     // Errors that occurred during translation.
+     const std::vector<Error>& errors() const { return errors_; }
+@@ -813,8 +814,8 @@ class Shader {
+     Shader& shader_;
+     uint64_t modification_;
+ 
+-    bool is_valid_ = false;
+-    bool is_translated_ = false;
++    std::atomic<bool> is_valid_{false};
++    std::atomic<bool> is_translated_{false};
+     std::vector<Error> errors_;
+     std::vector<uint8_t> translated_binary_;
+     std::string host_disassembly_;
+diff --git a/src/graphics/d3d12/pipeline_cache.cpp b/src/graphics/d3d12/pipeline_cache.cpp
+index 8e6b854..e5b6b6b 100644
+--- a/src/graphics/d3d12/pipeline_cache.cpp
++++ b/src/graphics/d3d12/pipeline_cache.cpp
+@@ -50,6 +50,9 @@
+ #include <rex/ui/d3d12/d3d12_util.h>
+ 
+ REXCVAR_DEFINE_BOOL(d3d12_dxbc_disasm, false, "GPU/D3D12", "Dump DXBC disassembly");
++REXCVAR_DEFINE_BOOL(d3d12_nonblocking_pipeline_creation, false, "GPU/D3D12",
++                    "Keep async pipeline compilation off submission boundaries; pending draws already wait for a ready PSO")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+ 
+ REXCVAR_DEFINE_BOOL(d3d12_dxbc_disasm_dxilconv, false, "GPU/D3D12",
+                     "Dump DXIL conversion disassembly");
+@@ -169,6 +172,7 @@ bool PipelineCache::Initialize() {
+ }
+ 
+ void PipelineCache::Shutdown() {
++  AwaitPipelineCreation();
+   // Shut down all threads, before destroying the pipelines since they may be
+   // creating them.
+   if (!creation_threads_.empty()) {
+@@ -719,6 +723,9 @@ void PipelineCache::InitializeShaderStorage(const std::filesystem::path& cache_r
+ }
+ 
+ void PipelineCache::ShutdownShaderStorage() {
++  // Workers may still publish shaders when runtime submission no longer joins
++  // them. Storage replacement/unload must retain the old lifetime boundary.
++  AwaitPipelineCreation();
+   if (storage_write_thread_) {
+     {
+       std::lock_guard<std::mutex> lock(storage_write_request_lock_);
+@@ -748,20 +755,30 @@ void PipelineCache::ShutdownShaderStorage() {
+ }
+ 
+ void PipelineCache::EndSubmission() {
+-  if (shader_storage_file_flush_needed_ || pipeline_storage_file_flush_needed_) {
++  const bool flush_shaders=shader_storage_file_flush_needed_.exchange(false,std::memory_order_acq_rel);
++  const bool flush_pipelines=pipeline_storage_file_flush_needed_.exchange(false,std::memory_order_acq_rel);
++  if (flush_shaders || flush_pipelines) {
+     {
+       std::lock_guard<std::mutex> lock(storage_write_request_lock_);
+-      if (shader_storage_file_flush_needed_) {
++      if (flush_shaders) {
+         storage_write_flush_shaders_ = true;
+       }
+-      if (pipeline_storage_file_flush_needed_) {
++      if (flush_pipelines) {
+         storage_write_flush_pipelines_ = true;
+       }
+     }
+     storage_write_request_cond_.notify_one();
+-    shader_storage_file_flush_needed_ = false;
+-    pipeline_storage_file_flush_needed_ = false;
+   }
++  if(REXCVAR_GET(d3d12_nonblocking_pipeline_creation) && REXCVAR_GET(async_shader_compilation)) {
++    // IssueDraw omits a draw whose atomic PSO state is still null. No submitted
++    // command references an unfinished PSO, so finishing unrelated background
++    // compilations here only stalls scene transitions and the guest clock.
++    return;
++  }
++  AwaitPipelineCreation();
++}
++
++void PipelineCache::AwaitPipelineCreation() {
+   if (!creation_threads_.empty()) {
+     CreateQueuedPipelinesOnProcessorThread();
+     // Await creation of all queued pipelines.

@@ -1,0 +1,465 @@
+diff --git a/cmake/rexglue_install.cmake b/cmake/rexglue_install.cmake
+index a003313..a713652 100644
+--- a/cmake/rexglue_install.cmake
++++ b/cmake/rexglue_install.cmake
+@@ -150,6 +150,8 @@ install(EXPORT rexglueTargets
+ #
+ # Windows: HKCU\Software\Kitware\CMake\Packages\rexglue  (REG_SZ, value name = MD5 hash)
+ # Unix:    ~/.cmake/packages/rexglue/<hash>               (file containing prefix path)
++option(REXGLUE_REGISTER_PACKAGE "Register this SDK in the CMake user package registry" ON)
++if(REXGLUE_REGISTER_PACKAGE)
+ install(CODE [[
+     # Normalize path casing on Windows before hashing to avoid duplicate entries
+     if(CMAKE_HOST_WIN32)
+@@ -174,3 +176,4 @@ install(CODE [[
+     message(STATUS "Registered rexglue in CMake user package registry")
+     message(STATUS "  -> ${CMAKE_INSTALL_PREFIX}")
+ ]])
++endif()
+diff --git a/include/rex/graphics/precise_wait.h b/include/rex/graphics/precise_wait.h
+new file mode 100644
+index 0000000..e31f9c1
+--- /dev/null
++++ b/include/rex/graphics/precise_wait.h
+@@ -0,0 +1,25 @@
++#pragma once
++#include <chrono>
++#include <rex/thread.h>
++#if defined(_WIN32)
++#include <windows.h>
++#endif
++namespace rex::graphics {
++// Keep sub-millisecond waits real on Windows. thread::Sleep truncates these
++// to Sleep(0), which can busy-poll and compete with the audio producer.
++inline void PreciseGpuWait(std::chrono::microseconds duration) {
++#if defined(_WIN32)
++  struct Timer {
++    HANDLE handle=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_MODIFY_STATE|SYNCHRONIZE);
++    ~Timer(){if(handle)CloseHandle(handle);}
++  };
++  thread_local Timer timer;
++  LARGE_INTEGER due; due.QuadPart=-duration.count()*10;
++  if(timer.handle && SetWaitableTimerEx(timer.handle,&due,0,nullptr,nullptr,nullptr,0) &&
++      WaitForSingleObject(timer.handle,INFINITE)==WAIT_OBJECT_0)return;
++  ::Sleep(DWORD((duration.count()+999)/1000));
++#else
++  rex::thread::Sleep(duration);
++#endif
++}
++}
+diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
+index 83d09f7..853bdaa 100644
+--- a/include/rex/ui/d3d12/d3d12_presenter.h
++++ b/include/rex/ui/d3d12/d3d12_presenter.h
+@@ -251,6 +251,8 @@ class D3D12Presenter final : public Presenter {
+     uint32_t swap_chain_width = 0;
+     uint32_t swap_chain_height = 0;
+     bool swap_chain_allows_tearing = false;
++    HANDLE swap_chain_waitable = nullptr;
++    bool swap_chain_uses_waitable = false;
+     Microsoft::WRL::ComPtr<IDXGISwapChain3> swap_chain;
+     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kSwapChainBufferCount> swap_chain_buffers;
+   };
+diff --git a/include/rex/ui/d3d12/timing_trace.h b/include/rex/ui/d3d12/timing_trace.h
+new file mode 100644
+index 0000000..452cb47
+--- /dev/null
++++ b/include/rex/ui/d3d12/timing_trace.h
+@@ -0,0 +1,41 @@
++// Optional host timing telemetry. Each channel has one producer; a separate
++// process persists the ring. No file I/O, allocation, or logs in the hot path.
++#pragma once
++#include <windows.h>
++#include <atomic>
++#include <cstdint>
++#include <cstddef>
++#include <new>
++#include <rex/cvar.h>
++REXCVAR_DECLARE(bool, trace_gpu_timing);
++namespace rex::ui::d3d12::timing {
++inline std::int64_t Now() { LARGE_INTEGER q; QueryPerformanceCounter(&q); return q.QuadPart; }
++struct Sample { std::int64_t start, ready, submit_begin, submit_end, present_begin, end; };
++class Ring {
++  static constexpr unsigned kCapacity=8192;
++  struct Shared {
++    std::uint32_t magic=0x42524754,version=1;
++    std::int64_t frequency=0;
++    std::atomic<std::uint32_t> committed{0};
++    std::uint32_t capacity=kCapacity,producer=0,reserved=0;
++    Sample samples[kCapacity]{};
++  };
++  static_assert(offsetof(Shared,samples)==32);
++  HANDLE handle_=nullptr;
++  Shared* data_=nullptr;
++ public:
++  explicit Ring(const wchar_t* channel) {
++    wchar_t name[128]; swprintf_s(name,L"Local\\BeatlesPort.%s.%lu",channel,GetCurrentProcessId());
++    handle_=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(Shared),name);
++    if(handle_) data_=static_cast<Shared*>(MapViewOfFile(handle_,FILE_MAP_ALL_ACCESS,0,0,sizeof(Shared)));
++    if(data_){ new(data_) Shared; LARGE_INTEGER f; QueryPerformanceFrequency(&f); data_->frequency=f.QuadPart; data_->producer=GetCurrentThreadId(); }
++  }
++  ~Ring(){ if(data_)UnmapViewOfFile(data_); if(handle_)CloseHandle(handle_); }
++  void Record(const Sample& sample){
++    if(!data_)return;
++    auto n=data_->committed.load(std::memory_order_relaxed);
++    data_->samples[n%kCapacity]=sample;
++    data_->committed.store(n+1,std::memory_order_release);
++  }
++};
++} // namespace rex::ui::d3d12::timing
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index a744375..4d4dd8d 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -22,6 +22,8 @@
+ #include <rex/perf/counter.h>
+ #include <rex/chrono/clock.h>
+ #include <rex/graphics/command_processor.h>
++#include <rex/graphics/precise_wait.h>
++REXCVAR_DECLARE(bool, gpu_precise_timing);
+ #include <rex/graphics/flags.h>
+ #include <rex/graphics/graphics_system.h>
+ #include <rex/graphics/pipeline/texture/info.h>
+@@ -1037,7 +1039,8 @@ bool CommandProcessor::ExecutePacketType3_WAIT_REG_MEM(memory::RingBuffer* reade
+           // User wants it fast and dangerous.
+           rex::thread::MaybeYield();
+         } else {
+-          rex::thread::Sleep(std::chrono::milliseconds(wait / 0x100));
++          if(REXCVAR_GET(gpu_precise_timing))PreciseGpuWait(std::chrono::microseconds(250));
++          else rex::thread::Sleep(std::chrono::milliseconds(wait / 0x100));
+         }
+         rex::thread::SyncMemory();
+         ReturnFromWait();
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index 19874a5..3f6e12c 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -20,6 +20,7 @@
+ #include <rex/dbg.h>
+ #include <rex/perf/counter.h>
+ #include <rex/graphics/d3d12/command_processor.h>
++#include <rex/ui/d3d12/timing_trace.h>
+ #include <rex/graphics/d3d12/graphics_system.h>
+ #include <rex/graphics/d3d12/shader.h>
+ #include <rex/graphics/flags.h>
+@@ -43,6 +44,10 @@ REXCVAR_DEFINE_BOOL(d3d12_readback_resolve, false, "GPU/D3D12",
+                     "Read render-to-texture results on the CPU")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
++REXCVAR_DEFINE_BOOL(clear_msaa_redirect, false, "GPU",
++                    "Avoid MSAA ownership copies for recognized XDK clear rectangles")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++
+ REXCVAR_DEFINE_BOOL(d3d12_submit_on_primary_buffer_end, true, "GPU/D3D12",
+                     "Submit command list when PM4 primary buffer ends")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+@@ -2268,6 +2273,109 @@ Shader* D3D12CommandProcessor::LoadShader(xenos::ShaderType shader_type, uint32_
+   return pipeline_cache_->LoadShader(shader_type, host_address, dword_count);
+ }
+ 
++namespace {
++// The Xbox 360 Direct3D 9 clears a render target by drawing a rectangle with
++// its clear shaders, with 4x (or 2x) MSAA set on a half-size surface: the same
++// EDRAM samples, a quarter of the pixels. On the host, that's a different
++// render target, so every clear transferred the whole old contents into an
++// MSAA render target (overwritten right away) and the cleared result back for
++// the next single-sample draw. The clear writes one value everywhere, so the
++// same EDRAM range drawn single-sample with the coordinates scaled up holds the
++// same data. This rewrites the registers for that draw and restores them.
++constexpr uint64_t kD3D9ClearVertexShaderHash = 0x1E6883FCCDE1F688;
++constexpr uint64_t kD3D9ClearColorPixelShaderHash = 0xA4A965C189287B99;
++
++class ClearMsaaRedirect {
++ public:
++  ClearMsaaRedirect(RegisterFile& regs, xenos::PrimitiveType primitive_type,
++                    const Shader& vertex_shader, const Shader* pixel_shader)
++      : regs_(regs) {
++    if (!REXCVAR_GET(clear_msaa_redirect) ||
++        primitive_type != xenos::PrimitiveType::kRectangleList ||
++        vertex_shader.ucode_data_hash() != kD3D9ClearVertexShaderHash ||
++        (pixel_shader && pixel_shader->ucode_data_hash() != kD3D9ClearColorPixelShaderHash)) {
++      return;
++    }
++    auto surface_info = regs.Get<reg::RB_SURFACE_INFO>();
++    if (surface_info.msaa_samples == xenos::MsaaSamples::k1X ||
++        !regs.Get<reg::PA_CL_CLIP_CNTL>().clip_disable ||
++        regs[XE_GPU_REG_PA_SC_WINDOW_OFFSET] != 0) {
++      return;
++    }
++    uint32_t scale_x = surface_info.msaa_samples >= xenos::MsaaSamples::k4X ? 2 : 1;
++    uint32_t scale_y = 2;
++    if (surface_info.surface_pitch * scale_x > xenos::kTexture2DCubeMaxWidthHeight) {
++      return;
++    }
++    for (uint32_t i = 0; i < kSavedCount; ++i) {
++      saved_[i] = regs[kSaved[i]];
++    }
++    active_ = true;
++    if (REXCVAR_GET(trace_gpu_timing)) {
++      static bool reported=false;
++      if(!reported){reported=true;REXLOG_INFO("TBRB clear optimization: recognized XDK MSAA clear redirected to single-sample rendering");}
++    }
++
++    surface_info.surface_pitch *= scale_x;
++    surface_info.msaa_samples = xenos::MsaaSamples::k1X;
++    regs[XE_GPU_REG_RB_SURFACE_INFO] = surface_info.value;
++
++    // Pixel = NDC * scale + offset (+ 0.5 with the Direct3D half-pixel offset,
++    // which isn't scaled, so the offset makes up for it).
++    auto vte = regs.Get<reg::PA_CL_VTE_CNTL>();
++    bool half_pixel = REXCVAR_GET(half_pixel_offset) &&
++                      regs.Get<reg::PA_SU_VTX_CNTL>().pix_center == xenos::PixelCenter::kD3DZero;
++    auto scale_axis = [&](uint32_t scale_reg, uint32_t offset_reg, bool scale_enabled,
++                          bool offset_enabled, uint32_t factor) {
++      float scale = scale_enabled ? regs.Get<float>(scale_reg) : 1.0f;
++      float offset = offset_enabled ? regs.Get<float>(offset_reg) : 0.0f;
++      offset = offset * float(factor) + (half_pixel ? 0.5f * float(factor - 1) : 0.0f);
++      regs[scale_reg] = rex::memory::Reinterpret<uint32_t>(scale * float(factor));
++      regs[offset_reg] = rex::memory::Reinterpret<uint32_t>(offset);
++    };
++    scale_axis(XE_GPU_REG_PA_CL_VPORT_XSCALE, XE_GPU_REG_PA_CL_VPORT_XOFFSET,
++               vte.vport_x_scale_ena, vte.vport_x_offset_ena, scale_x);
++    scale_axis(XE_GPU_REG_PA_CL_VPORT_YSCALE, XE_GPU_REG_PA_CL_VPORT_YOFFSET,
++               vte.vport_y_scale_ena, vte.vport_y_offset_ena, scale_y);
++    vte.vport_x_scale_ena = 1;
++    vte.vport_x_offset_ena = 1;
++    vte.vport_y_scale_ena = 1;
++    vte.vport_y_offset_ena = 1;
++    regs[XE_GPU_REG_PA_CL_VTE_CNTL] = vte.value;
++
++    auto scissor_tl = regs.Get<reg::PA_SC_WINDOW_SCISSOR_TL>();
++    auto scissor_br = regs.Get<reg::PA_SC_WINDOW_SCISSOR_BR>();
++    constexpr uint32_t kMax = xenos::kTexture2DCubeMaxWidthHeight;
++    scissor_tl.tl_x = std::min(uint32_t(scissor_tl.tl_x) * scale_x, kMax);
++    scissor_tl.tl_y = std::min(uint32_t(scissor_tl.tl_y) * scale_y, kMax);
++    scissor_br.br_x = std::min(uint32_t(scissor_br.br_x) * scale_x, kMax);
++    scissor_br.br_y = std::min(uint32_t(scissor_br.br_y) * scale_y, kMax);
++    regs[XE_GPU_REG_PA_SC_WINDOW_SCISSOR_TL] = scissor_tl.value;
++    regs[XE_GPU_REG_PA_SC_WINDOW_SCISSOR_BR] = scissor_br.value;
++  }
++  ~ClearMsaaRedirect() {
++    if (active_) {
++      for (uint32_t i = 0; i < kSavedCount; ++i) {
++        regs_[kSaved[i]] = saved_[i];
++      }
++    }
++  }
++
++ private:
++  static constexpr uint32_t kSaved[] = {
++      XE_GPU_REG_RB_SURFACE_INFO,         XE_GPU_REG_PA_CL_VTE_CNTL,
++      XE_GPU_REG_PA_CL_VPORT_XSCALE,      XE_GPU_REG_PA_CL_VPORT_XOFFSET,
++      XE_GPU_REG_PA_CL_VPORT_YSCALE,      XE_GPU_REG_PA_CL_VPORT_YOFFSET,
++      XE_GPU_REG_PA_SC_WINDOW_SCISSOR_TL, XE_GPU_REG_PA_SC_WINDOW_SCISSOR_BR,
++  };
++  static constexpr uint32_t kSavedCount = uint32_t(sizeof(kSaved) / sizeof(kSaved[0]));
++  RegisterFile& regs_;
++  uint32_t saved_[kSavedCount];
++  bool active_ = false;
++};
++}  // namespace
++
++
+ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint32_t index_count,
+                                       IndexBufferInfo* index_buffer_info,
+                                       bool major_mode_explicit) {
+@@ -2327,6 +2435,13 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint3
+   bool memexport_used_pixel = pixel_shader && (pixel_shader->memexport_eM_written() != 0);
+   bool memexport_used = memexport_used_vertex || memexport_used_pixel;
+ 
++  // Match the XDK clear shaders exactly; preserve general MSAA rendering.
++  std::optional<ClearMsaaRedirect> clear_redirect;
++  if (is_rasterization_done && !memexport_used &&
++      render_target_cache_->GetPath() == RenderTargetCache::Path::kHostRenderTargets) {
++    clear_redirect.emplace(*register_file_, primitive_type, *vertex_shader, pixel_shader);
++  }
++
+   if (!BeginSubmission(true)) {
+     return false;
+   }
+@@ -3428,7 +3543,14 @@ bool D3D12CommandProcessor::EndSubmission(bool is_swap) {
+     deferred_command_list_.Execute(command_list_, command_list_1_);
+     command_list_->Close();
+     ID3D12CommandList* execute_command_lists[] = {command_list_};
++    const bool trace_gpu=REXCVAR_GET(trace_gpu_timing);
++    const auto submit_begin=trace_gpu ? rex::ui::d3d12::timing::Now() : 0;
+     direct_queue->ExecuteCommandLists(1, execute_command_lists);
++    if(trace_gpu){
++      const auto end=rex::ui::d3d12::timing::Now();
++      static rex::ui::d3d12::timing::Ring ring(L"GpuSubmit");
++      ring.Record({submit_begin,submit_begin,submit_begin,end,end,end});
++    }
+     command_allocator_writable_first_->last_usage_submission = submission_current_;
+     if (command_allocator_submitted_last_) {
+       command_allocator_submitted_last_->next = command_allocator_writable_first_;
+diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
+index 8f2fcb0..0ff8195 100644
+--- a/src/graphics/graphics_system.cpp
++++ b/src/graphics/graphics_system.cpp
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include <rex/graphics/graphics_system.h>
++#include <rex/graphics/precise_wait.h>
+ 
+ #include <algorithm>
+ #include <cctype>
+@@ -31,6 +32,8 @@
+ #include <rex/ui/window.h>
+ #include <rex/ui/windowed_app_context.h>
+ 
++REXCVAR_DEFINE_BOOL(gpu_precise_timing, false, "GPU", "Use precise sleeping for vblank and WAIT_REG_MEM polls")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+ REXCVAR_DEFINE_STRING(swap_post_effect, "none", "GPU", "Swap post effect: none, fxaa, fxaa_extreme")
+     .allowed({"none", "fxaa", "fxaa_extreme"})
+     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+@@ -166,7 +169,11 @@ X_STATUS GraphicsSystem::SetupGuestGpu(runtime::FunctionDispatcher* function_dis
+             MarkVblank();
+             last_frame_time += interval_ticks;
+           }
+-          rex::thread::Sleep(std::chrono::milliseconds(1));
++          if (REXCVAR_GET(gpu_precise_timing)) {
++            const auto remaining=int64_t(last_frame_time+interval_ticks-chrono::Clock::QueryGuestTickCount());
++            if(remaining>0)PreciseGpuWait(std::chrono::microseconds(
++                std::clamp<uint64_t>(uint64_t(remaining)*1000000/guest_tick_frequency,50,1000)));
++          } else rex::thread::Sleep(std::chrono::milliseconds(1));
+         }
+         return 0;
+       }));
+diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
+index 306118e..e5dc467 100644
+--- a/src/ui/d3d12/d3d12_presenter.cpp
++++ b/src/ui/d3d12/d3d12_presenter.cpp
+@@ -23,6 +23,7 @@
+ #include <rex/ui/d3d12/d3d12_provider.h>
+ #include <rex/ui/d3d12/d3d12_util.h>
+ #include <rex/ui/surface_win.h>
++#include <rex/ui/d3d12/timing_trace.h>
+ 
+ #if defined(REX_HAS_FIDELITYFX_RUNTIME) && REX_HAS_FIDELITYFX_RUNTIME
+ #include <ffx_api/dx12/ffx_api_dx12.h>
+@@ -30,6 +31,11 @@
+ #include <ffx_api/ffx_upscale.h>
+ #endif
+ 
++REXCVAR_DEFINE_BOOL(d3d12_present_waitable, false, "UI/D3D12",
++                    "Wait outside the shared GPU queue before painting a new frame")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++REXCVAR_DEFINE_BOOL(trace_gpu_timing, false, "Diagnostics", "Publish host present and GPU submission CPU timings")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+ REXCVAR_DEFINE_BOOL(d3d12_allow_variable_refresh_rate_and_tearing, true, "UI/D3D12",
+                     "Allow variable refresh rate and tearing");
+ 
+@@ -55,7 +61,7 @@ D3D12Presenter::~D3D12Presenter() {
+   // Await completion of the usage of everything before destroying anything.
+   // From most likely the latest to most likely the earliest to be signaled, so
+   // just one sleep will likely be needed.
+-  paint_context_.AwaitSwapChainUsageCompletion();
++  paint_context_.DestroySwapChain();
+   guest_output_resource_refresher_submission_tracker_.Shutdown();
+   ui_submission_tracker_.Shutdown();
+ #if defined(REX_HAS_FIDELITYFX_RUNTIME) && REX_HAS_FIDELITYFX_RUNTIME
+@@ -363,7 +369,8 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+     }
+     bool swap_chain_resized = SUCCEEDED(paint_context_.swap_chain->ResizeBuffers(
+         0, UINT(new_swap_chain_width), UINT(new_swap_chain_height), DXGI_FORMAT_UNKNOWN,
+-        paint_context_.swap_chain_allows_tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0));
++        (paint_context_.swap_chain_allows_tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) |
++        (paint_context_.swap_chain_uses_waitable ? DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT : 0)));
+     if (swap_chain_resized) {
+       for (uint32_t i = 0; i < PaintContext::kSwapChainBufferCount; ++i) {
+         if (FAILED(paint_context_.swap_chain->GetBuffer(
+@@ -413,6 +420,9 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+       // rate.
+       swap_chain_desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+     }
++    if (REXCVAR_GET(d3d12_present_waitable)) {
++      swap_chain_desc.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
++    }
+     IDXGIFactory2* dxgi_factory = provider_.GetDXGIFactory();
+     ID3D12CommandQueue* direct_queue = provider_.GetDirectQueue();
+     Microsoft::WRL::ComPtr<IDXGISwapChain1> swap_chain_1;
+@@ -420,8 +430,16 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+ #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES)
+       case Surface::kTypeIndex_Win32Hwnd: {
+         HWND surface_hwnd = static_cast<const Win32HwndSurface&>(new_surface).hwnd();
+-        if (FAILED(dxgi_factory->CreateSwapChainForHwnd(
+-                direct_queue, surface_hwnd, &swap_chain_desc, nullptr, nullptr, &swap_chain_1))) {
++        HRESULT create_result=dxgi_factory->CreateSwapChainForHwnd(
++                direct_queue, surface_hwnd, &swap_chain_desc, nullptr, nullptr, &swap_chain_1);
++        if (FAILED(create_result) && (swap_chain_desc.Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)) {
++          REXLOG_WARN("D3D12Presenter: Waitable swap chain unavailable ({:08X}); using original presentation", unsigned(create_result));
++          swap_chain_desc.Flags &= ~DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
++          swap_chain_1.Reset();
++          create_result=dxgi_factory->CreateSwapChainForHwnd(
++                direct_queue, surface_hwnd, &swap_chain_desc, nullptr, nullptr, &swap_chain_1);
++        }
++        if (FAILED(create_result)) {
+           REXLOG_ERROR("D3D12Presenter: Failed to create a swap chain for the HWND");
+           return SurfacePaintConnectResult::kFailure;
+         }
+@@ -450,6 +468,15 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+     paint_context_.swap_chain_height = new_swap_chain_height;
+     paint_context_.swap_chain_allows_tearing =
+         (swap_chain_desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0;
++    paint_context_.swap_chain_uses_waitable =
++        (swap_chain_desc.Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) != 0;
++    if (paint_context_.swap_chain_uses_waitable &&
++        SUCCEEDED(paint_context_.swap_chain->SetMaximumFrameLatency(2))) {
++      paint_context_.swap_chain_waitable=paint_context_.swap_chain->GetFrameLatencyWaitableObject();
++    }
++    REXLOG_INFO("D3D12Presenter: waitable={}, tearing={}, {}x{}",
++        paint_context_.swap_chain_waitable != nullptr, paint_context_.swap_chain_allows_tearing,
++        new_swap_chain_width, new_swap_chain_height);
+     for (uint32_t i = 0; i < PaintContext::kSwapChainBufferCount; ++i) {
+       if (FAILED(paint_context_.swap_chain->GetBuffer(
+               i, IID_PPV_ARGS(&paint_context_.swap_chain_buffers[i])))) {
+@@ -549,12 +576,26 @@ void D3D12Presenter::PaintContext::DestroySwapChain() {
+     swap_chain_buffer_ref.Reset();
+   }
+   swap_chain.Reset();
++  if (swap_chain_waitable) { CloseHandle(swap_chain_waitable); swap_chain_waitable=nullptr; }
++  swap_chain_uses_waitable=false;
+   swap_chain_allows_tearing = false;
+   swap_chain_height = 0;
+   swap_chain_width = 0;
+ }
+ 
+ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawers) {
++  const bool trace=REXCVAR_GET(trace_gpu_timing);
++  timing::Sample sample{};
++  if(trace)sample.start=timing::Now();
++  if(paint_context_.swap_chain_waitable) {
++    // Bounded, non-alertable: an APC must not bypass frame readiness.
++    const DWORD result=WaitForSingleObject(paint_context_.swap_chain_waitable,100);
++    if(result==WAIT_FAILED){
++      REXLOG_WARN("D3D12Presenter: Frame readiness wait failed; reverting to Present pacing");
++      CloseHandle(paint_context_.swap_chain_waitable);paint_context_.swap_chain_waitable=nullptr;
++    }
++  }
++  if(trace)sample.ready=timing::Now();
+   // Begin the command list with the command allocator not currently potentially
+   // used on the GPU.
+   UINT64 current_paint_submission = paint_context_.paint_submission_tracker.GetCurrentSubmission();
+@@ -1142,7 +1183,9 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   // Execute and present.
+   command_list->Close();
+   ID3D12CommandList* execute_command_list = command_list;
++  if(trace)sample.submit_begin=timing::Now();
+   provider_.GetDirectQueue()->ExecuteCommandLists(1, &execute_command_list);
++  if(trace)sample.submit_end=timing::Now();
+   if (execute_ui_drawers) {
+     ui_submission_tracker_.NextSubmission();
+   }
+@@ -1155,9 +1198,11 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   // fullscreen is ever used in, the allow tearing flag must not be passed in
+   // fullscreen, but DXGI fullscreen is largely unneeded with the flip
+   // presentation model used in Direct3D 12).
++  if(trace)sample.present_begin=timing::Now();
+   HRESULT present_result = paint_context_.swap_chain->Present(
+       0, DXGI_PRESENT_RESTART |
+              (paint_context_.swap_chain_allows_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0));
++  if(trace){sample.end=timing::Now();static timing::Ring ring(L"HostPresent");ring.Record(sample);}
+   // Even if presentation has failed, work might have been enqueued anyway
+   // internally before the failure according to Jesse Natalie from the DirectX
+   // Discord server.

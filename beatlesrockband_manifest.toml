@@ -1,0 +1,10 @@
+# Portable example. Build-Game.ps1 writes an ignored .local.toml with your paths.
+[project]
+name = "beatlesrockband"
+sdk_version = "0.10.0"
+game_root = "game"
+
+[entrypoint]
+file_path = "game/default.xex"
+out_directory_path = "generated/default"
+includes = ["config/codegen.toml", "config/pointers.toml"]
