@@ -2,6 +2,9 @@
 
 **WIP 0.7.2 preview · Windows x64 · ReXGlue / Direct3D 12**
 
+<img width="518" height="291" alt="image" src="https://github.com/user-attachments/assets/749af186-da8a-4531-8e42-165602ebefd0" />
+
+
 This repository contains the native compatibility code, launcher, SDK patches and tests for the PC port. It is intended for contributors who want to inspect, edit and rebuild the project. For playing, use the complete portable application from Releases.
 
 No original game executable, disc files, music, DLC, generated game C++, saves or shader caches are included. Code generation requires your own legally obtained, extracted Xbox 360 copy. Keep generated output and your local game files out of commits.
