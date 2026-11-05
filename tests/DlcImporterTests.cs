@@ -14,7 +14,10 @@ class DlcImporterTests {
   Check(DlcInstaller.ListInstalled(root).Count==1,"installed package is indexed");
   string alias=Path.Combine(GameFiles.AppRoot,"renamed-fixture");File.Copy(Path.Combine(fixtures,"good"),alias,true);
   Check(DlcInstaller.Import(alias,CancellationToken.None,null,root).AlreadyInstalled,"renamed duplicate is detected without overwriting");
-  foreach(string name in new[]{"wrong-title","save-game","unsafe-path","executable","truncated","bad-magic"}){
+  var custom=DlcInstaller.Import(Path.Combine(fixtures,"generic-good"),CancellationToken.None,null,Path.Combine(GameFiles.AppRoot,"import-tests","custom"));
+  Check(custom.Record.Files==4,"generic-title TBRB catalog with matching assets accepted");
+  Check(DlcInstaller.ListInstalled(Path.Combine(GameFiles.AppRoot,"import-tests","custom")).Count==1,"verified custom is indexed under TBRB");
+  foreach(string name in new[]{"wrong-title","save-game","unsafe-path","executable","truncated","bad-magic","generic-other-origin","other-title-beatles-catalog","generic-missing-milo","generic-bad-midi","generic-comment-spoof","generic-string-spoof"}){
    string target=Path.Combine(GameFiles.AppRoot,"import-tests",name);bool rejected=false;
    try{DlcInstaller.Import(Path.Combine(fixtures,name),CancellationToken.None,null,target);}catch(IOException e){rejected=true;Console.WriteLine("REJECT "+name+": "+e.Message);}
    Check(rejected,"rejects "+name);Check(DlcInstaller.ListInstalled(target).Count==0,"failed import not published: "+name);Check(!Directory.GetDirectories(target,".dlc-import-*").Any(),"failed staging removed: "+name);

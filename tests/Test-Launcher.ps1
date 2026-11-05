@@ -10,12 +10,13 @@ if(Test-Path -LiteralPath $OutputDirectory){throw 'Choose a new output directory
 if($LASTEXITCODE){throw 'Launcher build failed'}
 $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $names=@('LauncherControlsTests','ControllerMappingTests','InstrumentUiTests','DlcUiTests','AeroPanePaintTests','PerformanceModeTests')
-if($FixtureDirectory){$names+='DlcImporterTests'}
+if($FixtureDirectory){$names+=@('DlcImporterTests','DlcLongPathTests')}
 foreach($name in $names){
  $exe=Join-Path $OutputDirectory ($name+'.exe')
  & $csc /nologo /target:exe /platform:x64 /codepage:65001 ('/out:'+$exe) ('/reference:'+(Join-Path $OutputDirectory 'BeatlesRockBandLauncher.exe')) /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Runtime.Serialization.dll (Join-Path $PSScriptRoot ($name+'.cs'))
  if($LASTEXITCODE){throw "Test build failed: $name"}
- $testArgument=if($name -eq 'DlcImporterTests'){$FixtureDirectory}else{Join-Path $OutputDirectory 'previews'}
+ Copy-Item -LiteralPath (Join-Path $OutputDirectory 'BeatlesRockBandLauncher.exe.config') -Destination ($exe+'.config') -Force
+ $testArgument=if($name -in @('DlcImporterTests','DlcLongPathTests')){$FixtureDirectory}else{Join-Path $OutputDirectory 'previews'}
  & $exe $testArgument | Out-File -LiteralPath (Join-Path $OutputDirectory ($name+'.log')) -Encoding utf8
  if($LASTEXITCODE){throw "Test failed: $name; see $OutputDirectory"}
  Get-Content -LiteralPath (Join-Path $OutputDirectory ($name+'.log')) -Tail 1

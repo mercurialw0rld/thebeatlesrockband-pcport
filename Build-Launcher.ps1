@@ -1,4 +1,4 @@
-param([string]$OutputDirectory,[string]$GameBuildDirectory,[string]$VsInstallDirectory,[string]$CrtDirectory)
+﻿param([string]$OutputDirectory,[string]$GameBuildDirectory,[string]$VsInstallDirectory,[string]$CrtDirectory)
 $ErrorActionPreference='Stop'
 if(-not $OutputDirectory){$OutputDirectory=Join-Path $PSScriptRoot 'out/BeatlesRockBand-PC'}
 if(-not $GameBuildDirectory){$GameBuildDirectory=Join-Path $PSScriptRoot 'out/build/game'}
@@ -24,6 +24,7 @@ foreach($name in @('LauncherCore.cs','LauncherApp.cs','Controls.cs','ControlsFor
 $compilerArgs+='/resource:'+(Join-Path $src 'assets/DMSerifDisplay-Regular.ttf')+',BeatlesLauncher.Display.ttf'
 & $csc @compilerArgs
 if($LASTEXITCODE){throw 'Launcher compilation failed.'}
+Copy-Item -LiteralPath (Join-Path $src 'BeatlesRockBandLauncher.exe.config') -Destination $OutputDirectory -Force
 foreach($name in $binaries){Copy-Item -LiteralPath (Join-Path $GameBuildDirectory $name) -Destination $runtime -Force}
 foreach($dll in Get-ChildItem -LiteralPath $CrtDirectory -File -Filter '*.dll'){Copy-Item -LiteralPath $dll.FullName -Destination $runtime -Force}
 foreach($name in @('launcher.ico','game-files.json')){Copy-Item -LiteralPath (Join-Path $src $name) -Destination $OutputDirectory -Force}
@@ -32,5 +33,4 @@ $lines=@('# Portable defaults. Data paths are supplied by the launcher.')+@(Get-
 $licenses=Join-Path $OutputDirectory 'licenses'
 New-Item -ItemType Directory -Path $licenses -Force | Out-Null
 foreach($name in @('ReXGlue-LICENSE.txt','SDL3-LICENSE.txt','DMSerifDisplay-OFL.txt')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot ('licenses/'+$name)) -Destination $licenses -Force}
-Copy-Item -LiteralPath (Join-Path $src 'README-English.md') -Destination (Join-Path $OutputDirectory 'LEEME.md') -Force
 Write-Output ('Portable application: '+$OutputDirectory)

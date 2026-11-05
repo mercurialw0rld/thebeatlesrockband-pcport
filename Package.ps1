@@ -1,10 +1,10 @@
 ﻿param([string]$OutputDirectory,[string]$ArchivePath)
 $ErrorActionPreference='Stop'
 if(-not $OutputDirectory){$OutputDirectory=Join-Path $PSScriptRoot 'out/BeatlesRockBand-PC'}
-if(-not $ArchivePath){$ArchivePath=Join-Path $PSScriptRoot 'out/BeatlesRockBand-PC-v0.7.2-preview-portable.zip'}
+if(-not $ArchivePath){$ArchivePath=Join-Path $PSScriptRoot 'out/BeatlesRockBand-PC-v0.7.3-preview-portable.zip'}
 New-Item -ItemType Directory -Path (Split-Path ([IO.Path]::GetFullPath($ArchivePath))) -Force | Out-Null
 $packageRoot=(Resolve-Path -LiteralPath $OutputDirectory).Path
-$files=@('BeatlesRockBandLauncher.exe','launcher.ico','game-files.json','LEEME.md')
+$files=@('BeatlesRockBandLauncher.exe','BeatlesRockBandLauncher.exe.config','launcher.ico','game-files.json')
 $runtime=@('beatlesrockband-guitar.exe','rexruntime.dll','rexgpu-xenos.dll','beatles-input.dll','beatles-content.exe','beatlesrockband.toml',
  'concrt140.dll','msvcp140.dll','msvcp140_1.dll','msvcp140_2.dll','msvcp140_atomic_wait.dll',
  'msvcp140_codecvt_ids.dll','vccorlib140.dll','vcruntime140.dll','vcruntime140_1.dll','vcruntime140_threads.dll')

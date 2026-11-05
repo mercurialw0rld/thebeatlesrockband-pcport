@@ -1,9 +1,8 @@
 # The Beatles: Rock Band for PC — source code
 
-**WIP 0.7.2 preview · Windows x64 · ReXGlue / Direct3D 12**
+**WIP 0.7.3 preview · Windows x64 · ReXGlue / Direct3D 12**
 
 <img width="518" height="291" alt="image" src="https://github.com/user-attachments/assets/749af186-da8a-4531-8e42-165602ebefd0" />
-
 
 This repository contains the native compatibility code, launcher, SDK patches and tests for the PC port. It is intended for contributors who want to inspect, edit and rebuild the project. For playing, use the complete portable application from Releases.
 
@@ -14,6 +13,8 @@ No original game executable, disc files, music, DLC, generated game C++, saves o
 - Guitar and drums, with separate keyboard and physical-device profiles.
 - Controller button, D-pad and axis mapping, including analog guitar whammy.
 - English launcher with DPI-aware layout, scrollable compact views and DLC import.
+- TBRB custom packages using generic title FFFE07D1, verified against song metadata and matching chart/audio/Milo assets. Other game titles remain rejected.
+- Startup-configured .NET long-path support and explicit extended paths for DLC operations; keep BeatlesRockBandLauncher.exe.config beside the launcher.
 - Windows XAudio2 output with an owned COM MTA lifetime, addressing startup error `800401F0`.
 - **Performance mode**: an optional scene-transition shader fix, enabled by default and applied on the next game start. A new effect may appear a few frames later while its pipeline compiles.
 
@@ -38,7 +39,7 @@ This is an experimental port. Playable songs have been completed by the tester, 
 - Windows x64 with Direct3D 12 for running the port.
 - Git available on `PATH`.
 - Visual Studio 2022 Build Tools or Visual Studio with **Desktop development with C++**, the Windows SDK, **C++ Clang tools for Windows** and **C++ CMake tools for Windows**. The existing native build used Clang 19.1.5. CMake 3.25 or newer and Ninja must be discoverable or installed in Visual Studio's bundled locations.
-- .NET Framework 4.x, including the x64 C# compiler, for the WinForms launcher.
+- .NET Framework 4.6.2 or newer, including the x64 C# compiler, for the WinForms launcher.
 - Python 3.10 or newer for optional fixture and scene-submission tests.
 - Your extracted disc files. The supported executable is:
 
@@ -86,7 +87,7 @@ After the first build, the local manifest can be reused:
 .\Build-Game.ps1 -Jobs 3
 ```
 
-Use `-SdkDirectory` for an existing patched SDK installation, `-BuildDirectory` for another native output folder, and `-AudioTests` to include the native audio test executable. `-GenerateOnly` and `-ConfigureOnly` diagnose setup without compiling the complete game.
+Use `-SdkDirectory` for an existing patched SDK installation, `-BuildDirectory` for another native output folder, `-AudioTests` for the native audio tests, and `-DlcTests` for custom-catalog validation tests. `-GenerateOnly` and `-ConfigureOnly` diagnose setup without compiling the complete game.
 
 The SDK uses `clang`/`clang++` targeting Windows MSVC; the native game uses `clang-cl`. Keep the executable and runtime DLLs from a matching build together.
 
@@ -106,7 +107,7 @@ Use `-GameBuildDirectory`, `-OutputDirectory`, `-VsInstallDirectory` or `-CrtDir
 .\Package.ps1
 ```
 
-Output: `out/BeatlesRockBand-PC-v0.7.2-preview-portable.zip`. Packaging uses an application-file allowlist and excludes player profiles, saves, imported DLC, caches, logs, PDBs and disc data. Do not distribute the complete native build directory. For usage and DLC import, see [the player guide](launcher-src/README-English.md).
+Output: `out/BeatlesRockBand-PC-v0.7.3-preview-portable.zip`. Packaging uses an application-file allowlist and excludes player profiles, saves, imported DLC, caches, logs, PDBs and disc data. The portable application does not include a LEEME file; documentation stays in this repository. Do not distribute the complete native build directory. For usage and DLC import, see [the player guide](launcher-src/README-English.md).
 
 ## Performance mode
 
@@ -138,7 +139,7 @@ Copy-Item .\out\build\game\windows-audio-tests.exe .\out\BeatlesRockBand-PC\runt
 .\out\BeatlesRockBand-PC\runtime\windows-audio-tests.exe
 ```
 
-Keep test output paths short if you encounter the existing .NET Framework path-length limit during DLC tests. Native audio tests require a usable default playback device and matching runtime/Visual C++ DLLs; running the test from the portable runtime folder supplies them. The test executable is excluded by the release packaging allowlist. See [tests/README.md](tests/README.md) for coverage and the intentional failure-path test.
+DLC tests include long-path coverage. Native audio tests require a usable default playback device and matching runtime/Visual C++ DLLs; running the test from the portable runtime folder supplies them. The test executable is excluded by the release packaging allowlist. See [tests/README.md](tests/README.md) for coverage and the intentional failure-path test.
 
 ## Contributing
 

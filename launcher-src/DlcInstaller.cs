@@ -28,7 +28,14 @@ namespace BeatlesLauncher {
   static string HeaderRoot(string root){return Path.Combine(root,"0000000000000000","454108B1","Headers","00000002");}
   static string IndexRoot(string root){return Path.Combine(root,".dlc-index");}
   static bool ValidId(string id){return id!=null&&id.Length==40&&id.All(c=>c>='0'&&c<='9'||c>='A'&&c<='F');}
-  static string Full(string path){return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);}
+  static string Full(string path){
+   // Normalize before adding the extended prefix. Do not depend on the global
+   // Windows long-path policy; native extraction already uses this same form.
+   if(path.StartsWith(@"\\?\UNC\",StringComparison.OrdinalIgnoreCase))path=@"\\"+path.Substring(8);
+   else if(path.StartsWith(@"\\?\",StringComparison.Ordinal))path=path.Substring(4);
+   string full=Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);
+   return full.StartsWith(@"\\",StringComparison.Ordinal)?@"\\?\UNC\"+full.Substring(2):@"\\?\"+full;
+  }
   static void NoLinks(string root,string path){
    root=Full(root);path=Full(path);
    if(path!=root&&!path.StartsWith(root+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new IOException("The DLC destination is outside its data folder.");
@@ -79,9 +86,10 @@ namespace BeatlesLauncher {
        if(cancel.IsCancellationRequested||elapsed.Elapsed.TotalMinutes>30){try{process.Kill();process.WaitForExit();}catch{}cancel.ThrowIfCancellationRequested();throw new IOException("The DLC reader timed out. No package was installed.");}
       }
       cancel.ThrowIfCancellationRequested();
-      if(!File.Exists(report))throw new IOException("Could not read this DLC package. It may be damaged or unsupported.");
+      if(!File.Exists(report))throw new IOException("The DLC reader exited without a result (code 0x"+unchecked((uint)process.ExitCode).ToString("X8")+"). Extract the complete application package with its runtime DLLs. No package was installed.");
       var native=GameFiles.ReadJson<DlcNativeResult>(report);
       if(process.ExitCode!=0||native==null||!native.Ok)throw new IOException(native==null||String.IsNullOrEmpty(native.Error)?"Could not read this DLC package.":native.Error);
+      if(progress!=null)progress("Finishing DLC installation…");
       string stagedPackage=Path.Combine(PackageRoot(stage),id),stagedHeader=Path.Combine(HeaderRoot(stage),id+".header");
       if(!Directory.Exists(stagedPackage)||!File.Exists(stagedHeader))throw new IOException("The DLC reader did not finish preparing the package.");
       var record=new DlcRecord{Id=id,Sha256=hash,Name=native.Name,Files=native.Files,Bytes=native.Bytes,ImportedUtc=DateTime.UtcNow.ToString("o")};

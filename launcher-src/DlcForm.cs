@@ -11,7 +11,7 @@ namespace BeatlesLauncher {
    preview=rendering;ShowInTaskbar=!rendering;Text="Import DLC · The Beatles: Rock Band";ClientSize=new Size(760,560);WindowButtons(false);StartPosition=FormStartPosition.CenterParent;
    body=new AeroPane{AutoScroll=true};Controls.Add(body);
    title=Aero.Label(body,"Downloadable content",Rectangle.Empty,Aero.Display(27),Aero.Ink);
-   hint=Aero.Label(body,"Import Xbox 360 DLC packages from your own copy. Select the original LIVE, PIRS or CON files, including files with no extension. Extract ZIP/RAR archives first. Restart the game after importing and allow its song cache to update.",Rectangle.Empty,Aero.UI(10),Aero.Muted);
+   hint=Aero.Label(body,"Import Xbox 360 LIVE, PIRS or CON packages, including files with no extension. TBRB custom songs with a generic title ID are checked using their catalog and assets. Extract ZIP/RAR first. Restart the game and allow its song cache to update.",Rectangle.Empty,Aero.UI(10),Aero.Muted);
    installed=new ListBox{Font=Aero.UI(10),BackColor=Aero.Cream,ForeColor=Aero.Ink,BorderStyle=BorderStyle.FixedSingle,HorizontalScrollbar=true,IntegralHeight=false};body.Controls.Add(installed);
    status=Aero.Label(body,"",Rectangle.Empty,Aero.UI(10),Aero.Muted);
    progress=new ProgressBar{Visible=false,Style=ProgressBarStyle.Marquee};body.Controls.Add(progress);

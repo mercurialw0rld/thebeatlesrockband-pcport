@@ -9,6 +9,7 @@
 #include <set>
 #include <stdexcept>
 #include <vector>
+#include "dlc_song_catalog.h"
 #include <rex/logging.h>
 #include <rex/filesystem/entry.h>
 #include <rex/filesystem/file.h>
@@ -18,6 +19,7 @@
 namespace fs=std::filesystem;
 using namespace rex::filesystem;
 constexpr uint32_t kTitle=0x454108B1;
+constexpr uint32_t kGenericCustomTitle=0xFFFE07D1;
 static fs::path LongPath(const fs::path& path){auto s=fs::absolute(path).wstring();if(s.starts_with(L"\\\\?\\"))return fs::path(s);return fs::path(s.starts_with(L"\\\\")?L"\\\\?\\UNC\\"+s.substr(2):L"\\\\?\\"+s);}
 struct Report {bool ok=false;std::string name,error;uint64_t bytes=0;size_t files=0;};
 static std::string Json(const std::string& text){
@@ -34,6 +36,29 @@ static fs::path SafeName(const std::string& name){
  return p;
 }
 struct Item {Entry* entry;fs::path relative;};
+static std::vector<uint8_t> ReadEntry(Entry* entry,size_t limit){
+ if(!entry||entry->size()>limit)throw std::runtime_error("The custom song catalog is missing or too large.");
+ File* raw=nullptr;if(entry->Open(FileAccess::kFileReadData,&raw)!=0||!raw)throw std::runtime_error("Could not read custom song metadata.");
+ auto file=std::unique_ptr<File,void(*)(File*)>(raw,[](File*f){f->Destroy();});
+ std::vector<uint8_t> data(entry->size());size_t offset=0;
+ while(offset<data.size()){size_t count=0;auto status=file->ReadSync(std::span<uint8_t>(data).subspan(offset),offset,&count);if(status!=0||!count||count>data.size()-offset)throw std::runtime_error("Custom song metadata is incomplete.");offset+=count;}
+ return data;
+}
+static void ValidateGenericSongs(const std::vector<Item>& items){
+ auto find=[&](const std::string& path)->Entry*{auto expected=Lower(rex::to_path(path).generic_wstring());for(const auto& item:items)if(!(item.entry->attributes()&kFileAttributeDirectory)&&Lower(item.relative.generic_wstring())==expected)return item.entry;return nullptr;};
+ auto* catalog=find("songs/songs.dta");auto bytes=ReadEntry(catalog,1024*1024);
+ auto stems=beatles::dlc::CustomSongStems(std::string_view(reinterpret_cast<const char*>(bytes.data()),bytes.size()));
+ for(const auto& stem:stems){
+  auto* midi=find(stem+".mid");auto* audio=find(stem+".mogg");
+  auto path=fs::path(stem);auto visual=path.parent_path()/"gen"/(path.filename().string()+".milo_xbox");
+  auto* scene=find(visual.generic_string());
+  if(!midi||!audio||!scene||midi->size()<4||!audio->size()||!scene->size())throw std::runtime_error("The generic-title package is missing TBRB chart, audio or Milo assets.");
+  // Only read the MIDI signature, not the complete chart or any audio.
+  File* raw=nullptr;if(midi->Open(FileAccess::kFileReadData,&raw)!=0||!raw)throw std::runtime_error("Could not open the custom song chart.");
+  auto file=std::unique_ptr<File,void(*)(File*)>(raw,[](File*f){f->Destroy();});std::array<uint8_t,4> magic{};size_t count=0;
+  if(file->ReadSync(magic,0,&count)!=0||count!=4||std::string_view(reinterpret_cast<const char*>(magic.data()),4)!="MThd")throw std::runtime_error("The custom song chart is not a MIDI file.");
+ }
+}
 static std::vector<Item> InspectTree(Entry* root,Report&r){
  std::vector<Item> items{{root,{}}};std::set<std::wstring> names;
  for(size_t i=0;i<items.size();++i){auto item=items[i];
@@ -79,7 +104,8 @@ int wmain(int argc,wchar_t**argv){
   if(fs::exists(stage))throw std::runtime_error("The staging folder must be new.");
   auto header=StfsContainerDevice::ReadPackageHeader(source);
   if(!header)throw std::runtime_error("Choose an original Xbox 360 STFS DLC package (LIVE, PIRS or CON), not a ZIP, RAR or XEX.");
-  if(header->metadata.execution_info.title_id!=kTitle)throw std::runtime_error("This DLC is for another game. The Beatles: Rock Band requires title ID 454108B1.");
+  const uint32_t sourceTitle=header->metadata.execution_info.title_id;
+  if(sourceTitle!=kTitle&&sourceTitle!=kGenericCustomTitle)throw std::runtime_error(fmt::format("This package declares title ID {:08X}; TBRB requires 454108B1. Only verified TBRB customs may use generic title FFFE07D1.",sourceTitle));
   if(header->metadata.content_type!=rex::system::XContentType::kMarketplaceContent)throw std::runtime_error("This is not a downloadable-content package. Saves, disc images and title updates cannot be imported here.");
   if(header->metadata.volume_type!=XContentVolumeType::kStfs||header->metadata.data_file_count>1||!header->metadata.volume_descriptor.stfs.is_valid())throw std::runtime_error("Unsupported or damaged STFS volume.");
   auto device=std::make_unique<StfsContainerDevice>("",source);
@@ -87,6 +113,7 @@ int wmain(int argc,wchar_t**argv){
   auto root=device->ResolvePath("");if(!root)throw std::runtime_error("The DLC package has no file table.");
   auto title=header->metadata.display_name(rex::system::XLanguage::kEnglish);report.name=title.empty()?rex::path_to_utf8(source.filename()):rex::string::to_utf8(title);
   auto items=InspectTree(root,report);
+  if(sourceTitle==kGenericCustomTitle)ValidateGenericSongs(items);
   fs::create_directories(stage);if(fs::space(stage).available<report.bytes+16*1024*1024)throw std::runtime_error("There is not enough free space to install this DLC.");
   rex::system::xam::ContentManager manager(nullptr,stage);
   rex::system::xam::XCONTENT_AGGREGATE_DATA data{};data.device_id=1;data.content_type=rex::system::XContentType::kMarketplaceContent;data.title_id=kTitle;data.xuid=0;data.set_file_name(rex::path_to_utf8(fs::path(id)));data.set_display_name(rex::string::to_utf16(report.name));

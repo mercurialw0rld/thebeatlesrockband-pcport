@@ -11,3 +11,5 @@ Build with `Build-Game.ps1 -AudioTests` for `windows-audio-tests.exe`. It includ
 `windows-audio-tests.exe --fail-driver` intentionally injects an engine failure. It must exit nonzero at the fatal audio factory path and log XAudio2Create error 80004005, rather than return an invalid guest handle. This is an intentional failure test, not a normal launch mode.
 
 These checks do not replace actual gameplay, physical controllers, listening tests or multi-monitor validation.
+
+0.7.3 fixtures include verified generic-title TBRB customs and negative checks for foreign titles, other origins, missing assets, invalid MIDI and comment/string spoofs. The runner copies the startup .NET configuration before running each test executable. DlcLongPathTests exercises import, indexing, duplicates and cleanup beyond MAX_PATH. Build-Game.ps1 -DlcTests includes the native 20-check catalog parser test.

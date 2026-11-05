@@ -1,4 +1,8 @@
-# The Beatles: Rock Band for PC — WIP 0.7.2 preview
+# The Beatles: Rock Band for PC — WIP 0.7.3 preview
+
+The DLC importer now accepts verified TBRB custom-song packages with generic title ID **FFFE07D1**. It checks the plaintext `songs/songs.dta` catalog, requires `game_origin beatles` for every song, and verifies matching MIDI, MOGG and Milo assets before importing under TBRB. It does not convert songs made for another game. The original package is read without modification.
+
+Long-path handling is configured at application startup, and DLC filesystem operations use explicit extended paths. This fixes cases where native extraction completed but the launcher reported that preparation did not finish, without requiring a change to Windows policy. Keep **BeatlesRockBandLauncher.exe.config** beside the launcher when updating. Long-path support requires .NET Framework 4.6.2 or newer. The 0.7.2 audio initialization fix and Performance mode are retained.
 
 Windows audio now initializes and retains its own COM MTA lifetime before creating XAudio2. This addresses startup error **800401F0 (CO_E_NOTINITIALIZED)** on PCs where another component has not already initialized COM. Audio setup errors identify the failing stage in Logs and stop before the game uses an invalid audio handle.
 
@@ -29,7 +33,7 @@ Click **Import DLC** at the bottom of the launcher, then **Choose DLC files…**
 
 The importer lists installed packages, skips identical packages even if renamed, and leaves the original files intact. It prepares each package separately before installation; a failed or cancelled extraction does not replace an existing package. Restart the game after importing and allow its song cache to update if prompted. Installed DLC stays in **userdata** and is not included in the distributable ZIP.
 
-Only data-only DLC for title ID **454108B1** is accepted. Title updates and packages containing new executable modules require separate support. The supplied Abbey Road, Rubber Soul, All You Need Is Love and Sgt. Pepper packages passed extraction and installation tests. The tester confirmed All You Need Is Love appears and plays with audio and notes; this does not validate every DLC track.
+Official data-only DLC for title ID **454108B1** is accepted, as are generic-title **FFFE07D1** custom packages that pass the TBRB song checks above. Other game title IDs remain rejected. Title updates and packages containing new executable modules require separate support. The supplied Abbey Road, Rubber Soul, All You Need Is Love and Sgt. Pepper packages passed extraction and installation tests. The tester confirmed All You Need Is Love appears and plays with audio and notes; this does not validate every DLC or custom track.
 
 ## Controls and devices
 

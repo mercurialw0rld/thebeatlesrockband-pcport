@@ -81,7 +81,7 @@ namespace BeatlesLauncher {
    saves=MakeButton("Saves",Rectangle.Empty,false);((AeroButton)saves).Link=true;saves.Click+=delegate {OpenFolder("userdata");};Controls.Add(saves);
    logs=MakeButton("Logs",Rectangle.Empty,false);((AeroButton)logs).Link=true;logs.Click+=delegate {OpenFolder("logs");};Controls.Add(logs);
    importDlc=MakeButton("Import DLC",Rectangle.Empty,false);((AeroButton)importDlc).Link=true;importDlc.Click+=delegate{using(var manager=new DlcForm())manager.ShowDialog(this);};Controls.Add(importDlc);
-   version=AddLabel(this,"0.7.2",Rectangle.Empty,8,FontStyle.Regular,Muted);version.TextAlign=ContentAlignment.MiddleRight;
+   version=AddLabel(this,"0.7.3",Rectangle.Empty,8,FontStyle.Regular,Muted);version.TextAlign=ContentAlignment.MiddleRight;
    RefreshControls();RefreshLayout();
    if(rendering){check=GameFiles.Check(settings.XexPath);ApplyCheck();}
    else Shown+=async delegate {if(!String.IsNullOrWhiteSpace(settings.XexPath))await ValidateSelection();};

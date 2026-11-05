@@ -1,4 +1,4 @@
-param(
+﻿param(
  [string]$GameDirectory,
  [string]$SdkDirectory,
  [string]$BuildDirectory,
@@ -6,7 +6,8 @@ param(
  [ValidateRange(1,128)][int]$Jobs=3,
  [switch]$GenerateOnly,
  [switch]$ConfigureOnly,
- [switch]$AudioTests
+ [switch]$AudioTests,
+ [switch]$DlcTests
 )
 $ErrorActionPreference='Stop'
 if(-not $SdkDirectory){$SdkDirectory=Join-Path $PSScriptRoot 'external/rexglue-sdk/out/install/tbrb'}
@@ -47,7 +48,8 @@ if($GenerateOnly){Write-Output 'Generated local C++ from the supplied XEX. Do no
 . (Join-Path $PSScriptRoot 'scripts/DevTools.ps1')
 $tools=Get-TbrbDevTools -VsInstallDirectory $VsInstallDirectory
 $audio=if($AudioTests){'ON'}else{'OFF'}
-& $tools.CMake -S $PSScriptRoot -B $build -G Ninja "-DCMAKE_MAKE_PROGRAM=$($tools.Ninja)" "-DCMAKE_CXX_COMPILER=$($tools.ClangCl)" -DCMAKE_CXX_COMPILER_TARGET=x86_64-pc-windows-msvc -DCMAKE_BUILD_TYPE=Release "-Drexglue_DIR=$sdk/lib/cmake/rexglue" "-DBEATLES_CODEGEN_MANIFEST=$manifest" "-DBEATLES_BUILD_AUDIO_TESTS=$audio"
+$dlc=if($DlcTests){'ON'}else{'OFF'}
+& $tools.CMake -S $PSScriptRoot -B $build -G Ninja "-DCMAKE_MAKE_PROGRAM=$($tools.Ninja)" "-DCMAKE_CXX_COMPILER=$($tools.ClangCl)" -DCMAKE_CXX_COMPILER_TARGET=x86_64-pc-windows-msvc -DCMAKE_BUILD_TYPE=Release "-Drexglue_DIR=$sdk/lib/cmake/rexglue" "-DBEATLES_CODEGEN_MANIFEST=$manifest" "-DBEATLES_BUILD_AUDIO_TESTS=$audio" "-DBEATLES_BUILD_DLC_TESTS=$dlc"
 if($LASTEXITCODE){throw 'Game CMake configuration failed.'}
 if($ConfigureOnly){Write-Output ('Configured native build: '+$build);exit 0}
 & $tools.CMake --build $build --parallel $Jobs

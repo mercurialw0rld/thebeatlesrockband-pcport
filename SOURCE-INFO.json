@@ -1,5 +1,5 @@
 {
-  "version": "0.7.2-preview",
+  "version": "0.7.3-preview",
   "kind": "editable-source",
   "date": "2026-11-04",
   "sdk_commit": "bd833a2ab69d305f99ddf57418fc38ffec8af93d",
@@ -7,5 +7,10 @@
   "disc_data_included": false,
   "compiled_application_included": false,
   "stable_cmake_scaffold": "cmake/ReXGlue.cmake",
-  "validation": "VALIDATION.md"
+  "validation": "VALIDATION.md",
+  "dlc_generic_title": "FFFE07D1",
+  "dlc_generic_validation": "TBRB catalog and matching MIDI/MOGG/Milo assets",
+  "long_paths": "startup .NET switches plus explicit extended paths",
+  "portable_leeme_included": false,
+  "portable_application_files": 23
 }
