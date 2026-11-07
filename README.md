@@ -1,6 +1,6 @@
 # The Beatles: Rock Band for PC — source code
 
-**WIP 0.7.3 preview · Windows x64 · ReXGlue / Direct3D 12**
+**v0-7-3 · Windows x64 · ReXGlue / Direct3D 12**
 
 <img width="518" height="291" alt="image" src="https://github.com/user-attachments/assets/749af186-da8a-4531-8e42-165602ebefd0" />
 
