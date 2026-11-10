@@ -2,7 +2,8 @@
 
 **v0-7-3 · Windows x64 · ReXGlue / Direct3D 12**
 
-<img width="518" height="291" alt="image" src="https://github.com/user-attachments/assets/749af186-da8a-4531-8e42-165602ebefd0" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/65e3cd0b-c9ba-4a0d-a818-d126f9fdbc0f" />
+
 
 This repository contains the native compatibility code, launcher, SDK patches and tests for the PC port. It is intended for contributors who want to inspect, edit and rebuild the project. For playing, use the complete portable application from Releases.
 
