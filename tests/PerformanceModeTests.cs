@@ -14,6 +14,10 @@ class PerformanceModeTests {
   Check(new Settings().PerformanceMode,"new users keep the transition fix enabled");
   File.WriteAllText(GameFiles.SettingsPath,"{\"XexPath\":\"C:/Legal game/default.xex\",\"Volume\":73,\"Keys\":[{\"Key\":\"whammy\",\"Value\":\"Numpad0\"}]}");
   var settings=GameFiles.LoadSettings();Check(settings.PerformanceMode&&settings.Volume==73&&settings.Keys["whammy"]=="Numpad0","older profiles enable the fix without losing existing values");
+  Check(new Settings().Language==1&&settings.Language==1&&GameFiles.Arguments(settings,"C:/Legal game","test.log").Contains("--user_language=1"),"new and older profiles default to English");
+  settings.Language=5;GameFiles.WriteJson(GameFiles.SettingsPath,settings);settings=GameFiles.LoadSettings();
+  Check(GameFiles.Arguments(settings,"C:/Legal game","test.log").Contains("--user_language=5"),"selected language survives save/reload and reaches the runtime");
+  settings.Language=99;Check(GameFiles.Arguments(settings,"C:/Legal game","test.log").Contains("--user_language=1"),"unknown language falls back to English");settings.Language=1;
   foreach(bool enabled in new[]{false,true}){
    settings.PerformanceMode=enabled;GameFiles.WriteJson(GameFiles.SettingsPath,settings);settings=GameFiles.LoadSettings();
    Check(settings.PerformanceMode==enabled,"performance mode survives save/reload: "+enabled);
