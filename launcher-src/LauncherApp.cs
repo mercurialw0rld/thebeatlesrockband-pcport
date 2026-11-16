@@ -16,7 +16,7 @@ namespace BeatlesLauncher {
   Settings settings;
   FileDisplay path;
   Label status,volumeText;
-  ComboBox resolution;
+  ComboBox resolution,language;Label languageLabel;
   CheckBox fullscreen,performanceMode;
   GlassSlider volume;
   Button play,browse;
@@ -43,6 +43,7 @@ namespace BeatlesLauncher {
    int combo=Math.Max(S(34),resolution.PreferredHeight);
    if(bw>=S(440)){Place(resolution,0,y,S(205),combo);Place(fullscreen,S(238),y,bw-S(238),combo);y+=combo+gap;}
    else{Place(resolution,0,y,bw,combo);y+=combo+S(8);Place(fullscreen,0,y,bw,S(34));y+=S(48);}
+   Place(languageLabel,0,y,bw,S(24));y+=S(29);Place(language,0,y,Math.Min(S(205),bw),combo);y+=combo+gap;
    Place(performanceMode,0,y,bw,S(32));y+=S(34);
    h=TextHeight(performanceHint,bw,24);Place(performanceHint,0,y,bw,h);y+=h+S(12);
    Place(instrumentTitle,0,y,Math.Max(S(110),bw-S(165)),S(46));Place(editControls,bw-S(150),y+S(5),S(150),S(36));y+=S(56);
@@ -66,6 +67,8 @@ namespace BeatlesLauncher {
    resolutionLabel=AddLabel(body,"Resolution",Rectangle.Empty,9,FontStyle.Bold,Muted);
    resolution=new AeroCombo();resolution.Items.AddRange(new object[]{"1280 × 720","1600 × 900","1920 × 1080"});resolution.SelectedIndex=settings.Width==1920?2:settings.Width==1600?1:0;body.Controls.Add(resolution);
    fullscreen=new AeroCheckBox {Text="Fullscreen",Checked=settings.Fullscreen};body.Controls.Add(fullscreen);
+   languageLabel=AddLabel(body,"Language",Rectangle.Empty,9,FontStyle.Bold,Muted);
+   language=new AeroCombo {Name="language"};language.Items.AddRange(Settings.LanguageNames);language.SelectedIndex=Math.Max(0,Array.IndexOf(Settings.LanguageIds,settings.Language));body.Controls.Add(language);
    performanceMode=new AeroCheckBox {Name="performanceMode",Text="Performance mode",Checked=settings.PerformanceMode,AccessibleDescription="Reduce shader compilation stalls during scene transitions. New effects may appear a few frames later. Applies on the next game start."};body.Controls.Add(performanceMode);
    performanceHint=AddLabel(body,"Smoother scene transitions. New effects may appear a few frames later. Applies on next start.",Rectangle.Empty,9,FontStyle.Regular,Muted);
    performanceMode.CheckedChanged+=PerformanceChanged;
@@ -137,7 +140,7 @@ namespace BeatlesLauncher {
    await ValidateSelection();if(check==null||!check.Ready)return;
    if(Process.GetProcessesByName("beatlesrockband-guitar").Any()) {MessageBox.Show(this,"A game is already running. Close it before starting another.","Game already running",MessageBoxButtons.OK,MessageBoxIcon.Information);return;}
    if(!String.IsNullOrEmpty(settings.InputDevice)&&settings.InputDevice!="keyboard"){ControllerDevices.State state;if(!ControllerDevices.Read(settings.InputDevice,out state)){MessageBox.Show(this,"The selected controller is disconnected. Connect it, or choose Keyboard in Edit controls.","Connect your controller",MessageBoxButtons.OK,MessageBoxIcon.Information);return;}}
-   int[] widths={1280,1600,1920},heights={720,900,1080};settings.Width=widths[resolution.SelectedIndex];settings.Height=heights[resolution.SelectedIndex];settings.Fullscreen=fullscreen.Checked;settings.PerformanceMode=performanceMode.Checked;settings.Volume=volume.Value;
+   int[] widths={1280,1600,1920},heights={720,900,1080};settings.Width=widths[resolution.SelectedIndex];settings.Height=heights[resolution.SelectedIndex];settings.Fullscreen=fullscreen.Checked;settings.Language=Settings.LanguageIds[language.SelectedIndex];settings.PerformanceMode=performanceMode.Checked;settings.Volume=volume.Value;
    try {
     play.Enabled=false;game=GameFiles.Start(settings,check.Root);if(game==null)throw new Exception("Windows could not start the game.");
     game.Exited+=GameExited;game.EnableRaisingEvents=true;status.Text="The game is running.";Hide();

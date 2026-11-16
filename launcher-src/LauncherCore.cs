@@ -16,13 +16,17 @@ namespace BeatlesLauncher {
   [DataMember] public bool Fullscreen = false;
   [DataMember] public bool PerformanceMode = true;
   [DataMember] public int Volume = 100;
+  [DataMember] public int Language = 1;
+  // Xbox 360 XLanguage IDs for the languages on the World disc.
+  public static readonly int[] LanguageIds = {1,4,3,5,6};
+  public static readonly string[] LanguageNames = {"English","Français","Deutsch","Español","Italiano"};
   [DataMember] public Dictionary<string,string> Keys = Controls.Defaults();
   [DataMember] public string InputDevice = "keyboard";
   [DataMember] public string Instrument = "guitar";
   [DataMember] public Dictionary<string,string> DrumKeys = Controls.Defaults("drums");
   [DataMember] public Dictionary<string,Dictionary<string,string>> DrumDeviceBindings = new Dictionary<string,Dictionary<string,string>>();
   [DataMember] public Dictionary<string,Dictionary<string,string>> DeviceBindings = new Dictionary<string,Dictionary<string,string>>();
-  [OnDeserializing] void DefaultsBeforeRead(StreamingContext context){Width=1280;Height=720;Volume=100;PerformanceMode=true;InputDevice="keyboard";Instrument="guitar";}
+  [OnDeserializing] void DefaultsBeforeRead(StreamingContext context){Width=1280;Height=720;Volume=100;Language=1;PerformanceMode=true;InputDevice="keyboard";Instrument="guitar";}
  }
  [DataContract] public class GameFile {
   [DataMember] public string Path;
@@ -100,7 +104,8 @@ namespace BeatlesLauncher {
     "--window_width=" + settings.Width, "--window_height=" + settings.Height,
     "--fullscreen=" + settings.Fullscreen.ToString().ToLowerInvariant(),
     "--d3d12_nonblocking_pipeline_creation=" + settings.PerformanceMode.ToString().ToLowerInvariant(),
-    "--game_volume=" + Math.Max(0, Math.Min(100, settings.Volume))
+    "--game_volume=" + Math.Max(0, Math.Min(100, settings.Volume)),
+    "--user_language=" + (Settings.LanguageIds.Contains(settings.Language) ? settings.Language : 1)
    };
    args.AddRange(Controls.Arguments(instrument=="drums"?settings.DrumKeys:settings.Keys,instrument));
    if(!String.IsNullOrEmpty(settings.InputDevice)&&settings.InputDevice!="keyboard") {
